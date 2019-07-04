@@ -1,5 +1,5 @@
 import { Editor } from 'slate-react'
-import { Value } from 'slate'
+import { Annotation, Value } from 'slate'
 
 import React from 'react'
 import initialValue from './value.json'
@@ -24,6 +24,16 @@ const isCodeHotkey = isKeyHotkey('mod+`')
  * @type {Component}
  */
 
+let ANNOTATIONS_KEY = 0
+const ANNOTATIONS_KEY_PREFIX = 'annotation'
+
+function getAnnotationId() {
+  const id = `${ANNOTATIONS_KEY_PREFIX}-${ANNOTATIONS_KEY}`
+
+  ANNOTATIONS_KEY++
+  return id
+}
+
 class SyncingEditor extends React.Component {
   /**
    * Deserialize the initial editor value.
@@ -45,6 +55,9 @@ class SyncingEditor extends React.Component {
   applyOperations = operations => {
     this.remote = true
     operations.forEach(o => this.editor.applyOperation(o))
+
+    // eslint-disable-next-line no-console
+    console.debug('applied operations from other editor', operations)
     this.remote = false
   }
 
@@ -84,6 +97,25 @@ class SyncingEditor extends React.Component {
           {this.renderMarkButton('italic', 'format_italic')}
           {this.renderMarkButton('underlined', 'format_underlined')}
           {this.renderMarkButton('code', 'code')}
+          <Button
+            active
+            onMouseDown={() => {
+              const selection = this.editor.value.selection
+
+              if (selection.isExpanded) {
+                this.editor.addAnnotation(
+                  Annotation.create({
+                    key: getAnnotationId(),
+                    anchor: selection.anchor,
+                    focus: selection.focus,
+                    type: 'comment',
+                  })
+                )
+              }
+            }}
+          >
+            <Icon>comment</Icon>
+          </Button>
         </Toolbar>
         <Editor
           placeholder="Enter some text..."
@@ -92,6 +124,7 @@ class SyncingEditor extends React.Component {
           onChange={this.onChange}
           onKeyDown={this.onKeyDown}
           renderMark={this.renderMark}
+          renderAnnotation={this.renderAnnotation}
           spellCheck
         />
       </div>
@@ -138,6 +171,32 @@ class SyncingEditor extends React.Component {
         return <u {...attributes}>{children}</u>
       default:
         return next()
+    }
+  }
+
+  renderAnnotation = (props, editor, next) => {
+    const { children, annotation, attributes } = props
+
+    // eslint-disable-next-line no-console
+    console.debug('render annotation, editor.name=', this.props.name)
+
+    switch (annotation.type) {
+      case 'comment': {
+        // eslint-disable-next-line no-console
+        console.debug(
+          'render comment annotation, editor.name=',
+          this.props.name
+        )
+        return (
+          <span {...attributes} style={{ backgroundColor: '#ff6600' }}>
+            {children}
+          </span>
+        )
+      }
+
+      default: {
+        return next()
+      }
     }
   }
 
@@ -215,6 +274,7 @@ class SyncingOperationsExample extends React.Component {
       <div>
         <SyncingEditor
           ref={one => (this.one = one)}
+          name="top-editor"
           onChange={this.onOneChange}
         />
         <div
@@ -226,6 +286,7 @@ class SyncingOperationsExample extends React.Component {
         />
         <SyncingEditor
           ref={two => (this.two = two)}
+          name="bottom-editor"
           onChange={this.onTwoChange}
         />
       </div>
